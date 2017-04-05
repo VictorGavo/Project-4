@@ -3,6 +3,7 @@ import datetime
 from datetime import date
 import os
 import sys
+import pdb
 
 from peewee import *
 
@@ -37,13 +38,20 @@ def menu_loop():
 
     while choice != 'q':
         print("Enter 'q' to quit.")
+
         for key, value in main_menu.items():
-            print('[{}] {}'.format(key, value.__doc__))
+            print('[{}] {}'.format(key, value))
         choice = input("Action: ").lower().strip()
         clear()
 
-        if choice in main_menu:
-            main_menu[choice]()
+        if choice == 'a':
+            name = input("Name: ").title()
+            task = input("Task: ")
+            duration = validator('int')
+            notes = input("Notes: ")
+            add_entry(name, task, duration, notes)
+        elif choice == 'l':
+            menu_lookup()
 
 
 def menu_lookup():
@@ -53,12 +61,18 @@ def menu_lookup():
     while choice != 'q':
         print("Enter 'q' to return to the previous menu.")
         for key, value in lookup_menu.items():
-            print('[{}] {}'.format(key, value.__doc__))
+            print('[{}] {}'.format(key, value))
         choice = input('Action: ').lower().strip()
         clear()
 
-        if choice in lookup_menu:
-            lookup_menu[choice]()
+        if choice == 'd':
+            menu_date()
+        elif choice == 'e':
+            query = input("Enter a name: ").capitalize()
+            find_by_employee(query)
+        elif choice == 't':
+            query = input("Enter a term: ")
+            find_by_term(query)
 
 
 def menu_date():
@@ -68,120 +82,73 @@ def menu_date():
     while choice != 'q':
         print("Enter 'q' to return to the previous menu.")
         for key, value in date_menu.items():
-            print('[{}] {}'.format(key, value.__doc__))
+            print('[{}] {}'.format(key, value))
         choice = input('Action: ').lower().strip()
         clear()
 
-        if choice in date_menu:
-            date_menu[choice]()
+        if choice == 'a':
+            list_entries(Entry.select().order_by(Entry.timestamp.desc()))
+        elif choice == 'r':
+            lower_date = validator('date')
+            higher_date = validator('date')
+            find_by_range(lower_date, higher_date)
 
 
-def find_by_employee():
-    """Find all entries from an employee."""
-    query = input("Enter a name: ").capitalize()
-    entries = Entry.select().where(Entry.name == query).order_by(Entry.timestamp.desc())
-    count = 0
+def menu_edit(choice):
+    if choice == 'task':
+        item = input("Task: ")
+    elif choice == 'duration':
+        item = validator('int')
+    elif choice == 'notes':
+        item = input("Notes: ")
+    elif choice == 'date':
+        item = validator('date')
+    elif choice == 'quit':
+        item = 0
+    return item
 
-    if entries:
-        for entry in entries:
-            count += 1
-            print("[{}] {}, {}".format(count, entry.name, entry.task))
 
-        next_action = input("Select an entry: ")
-        clear()
-        try:
-            int(next_action)
-            index = int(next_action) - 1
-            view_entry(entries, index)
-        except ValueError:
-            print("That is an invalid command.")
-            pass
+def add_entry(name, task, duration, notes):
+    """Add an entry."""
+
+    Entry.create(name=name, task=task, duration=duration, notes=notes)
+    clear()
+
+
+def delete_entry(entry):
+    """Delete an entry."""
+    if input("Are you sure? [yN] ").lower() == 'y':
+        entry.delete_instance()
+        print("Entry deleted.")
+
+
+def edit_entry(choice, entry, new_item):
+    """Edit the current entry."""
+    entry_id = entry.id
+
+    if choice == 'task':
+        q = Entry.update(task=new_item).where(Entry.id == entry_id)
+        q.execute()
+    elif choice == 'duration':
+        q = Entry.update(duration=new_item).where(Entry.id == entry_id)
+        q.execute()
+    elif choice == 'notes':
+        q = Entry.update(notes=new_item).where(Entry.id == entry_id)
+        q.execute()
+    elif choice == 'date':
+        q = Entry.update(timestamp=new_item).where(Entry.id == entry_id)
+        q.execute()
+    elif choice == 'quit':
+        pass
     else:
-        print("No entries were found that match your search criteria.")
+        print("That is not a valid command.")
 
 
-def find_by_term():
-    """Find all entries pertaining to a term."""
-    query = input("Enter a term: ")
-    entries = Entry.select().where(
-        Entry.task.contains(query) |
-        Entry.notes.contains(query)).order_by(Entry.timestamp.desc())
-    count = 0
-
-    if entries:
-        for entry in entries:
-            count += 1
-            print("[{}] {}, {}".format(count, entry.name, entry.task))
-
-        next_action = input("Select an entry: ")
-        clear()
-        try:
-            int(next_action)
-            index = int(next_action) - 1
-            view_entry(entries, index)
-        except ValueError:
-            print("That is an invalid command.")
-            pass
-    else:
-        print("No entries were found that match your search criteria.")
-
-
-def find_by_range():
-    """Find all entries in a range of dates."""
-    lower_date = input("Enter the earlier date (mm/dd/yyyy): ")
-    higher_date = input("Enter the later date (mm/dd/yyyy): ")
-    try:
-        lower_date = datetime.datetime.strptime(lower_date, "%m/%d/%Y").date()
-        higher_date = datetime.datetime.strptime(higher_date, "%m/%d/%Y").date()
-    except ValueError:
-        print("Invalid dates.")
-    entries = Entry.select().where((Entry.timestamp >= lower_date) &
-                                   (Entry.timestamp <= higher_date)).order_by(Entry.timestamp.desc())
-    count = 0
-
-    if entries:
-        for entry in entries:
-            count += 1
-            print("[{}] {}, {}".format(count, entry.name, entry.task))
-
-        next_action = input("Select an entry: ")
-        clear()
-        try:
-            int(next_action)
-            index = int(next_action) - 1
-            view_entry(entries, index)
-        except ValueError:
-            print("That is an invalid command.")
-            pass
-    else:
-        print("No entries were found that match your search criteria.")
-
-
-def all_entries():
-    """List all entries by date."""
-    entries = Entry.select().order_by(Entry.timestamp.desc())
-    count = 0
-
-    if entries:
-        for entry in entries:
-            count += 1
-            print("[{}] {}, {}".format(count, entry.name, entry.task))
-
-        next_action = input("Select an entry: ")
-        clear()
-        if next_action == 'q':
-            pass
-        elif int(next_action):
-            index = int(next_action) - 1
-            view_entry(entries, index)
-    else:
-        print("It appears there are no entries.")
-
-
-def view_entry(entries, index):
+def entry_options(entries, index):
     """Look through a list of entries."""
     action = None
-    display(entries[index])
+    entry = entries[index]
+    display(entry)
     print("\n\n")
     print("[e] edit entry")
     print("[d] delete entry")
@@ -201,7 +168,10 @@ def view_entry(entries, index):
 
     if action == 'e':
         clear()
-        editor(entries[index])
+        display(entry)
+        choice = validator('edit')
+        new_item = menu_edit(choice)
+        edit_entry(choice, entry, new_item)
     elif action == 'd':
         delete_entry(entries[index])
         clear()
@@ -210,21 +180,21 @@ def view_entry(entries, index):
             entries[index-1]
             index -= 1
             clear()
-            view_entry(entries, index)
+            entry_options(entries, index)
         except ValueError:
             clear()
             print("This is the first entry.")
-            view_entry(entries, index)
+            entry_options(entries, index)
     elif action == 'n':
         try:
             entries[index+1]
             index += 1
             clear()
-            view_entry(entries, index)
+            entry_options(entries, index)
         except IndexError:
             clear()
             print("This is the last entry.")
-            view_entry(entries, index)
+            entry_options(entries, index)
     elif action == 'q':
         clear()
         pass
@@ -239,65 +209,91 @@ def display(entry):
     print("Date: {}".format(entry.timestamp.strftime('%A %B %d, %Y')))
 
 
-def add_entry():
-    """Add an entry."""
-    name = input("Name: ").capitalize()
-    task = input("Task: ")
-    duration = input("Duration (in minutes): ")
-    notes = input("Notes: ")
-
-    Entry.create(name=name, task=task, duration=duration, notes=notes)
-    clear()
+def find_by_employee(query):
+    """Find all entries from an employee."""
+    entries = Entry.select().where(Entry.name.contains(query)).order_by(Entry.timestamp.desc())
+    list_entries(entries)
 
 
-def delete_entry(entry):
-    """Delete an entry."""
-    if input("Are you sure? [yN] ").lower() == 'y':
-        entry.delete_instance()
-        print("Entry deleted.")
+def find_by_term(query):
+    """Find all entries pertaining to a term."""
+    entries = Entry.select().where(
+        Entry.task.contains(query) |
+        Entry.notes.contains(query)).order_by(Entry.timestamp.desc())
+    list_entries(entries)
 
 
-def editor(entry):
-    """Edit the current entry."""
-    entry_id = entry.id
-    display(entry)
-    choice = input("What would you like to edit? ").lower()
+def find_by_range(lower_date, higher_date):
+    """Find all entries in a range of dates."""
+    entries = Entry.select().where((Entry.timestamp >= lower_date) &
+                                   (Entry.timestamp <= higher_date)).order_by(
+                                   Entry.timestamp.desc())
+    list_entries(entries)
 
-    if choice == 'task':
-        q = Entry.update(task=input("New Task: ")).where(Entry.id == entry_id)
-        q.execute()
-    elif choice == 'duration':
-        q = Entry.update(duration=input("New Duration (in minutes): ")).where(Entry.id == entry_id)
-        q.execute()
-    elif choice == 'notes':
-        q = Entry.update(notes=input("New Notes: ")).where(Entry.id == entry_id)
-        q.execute()
-    elif choice == 'date':
-        var = input("New Date (mm/dd/yyyy): ")
-        var = datetime.datetime.strptime(var, "%m/%d/%Y")
-        q = Entry.update(timestamp=var).where(Entry.id == entry_id)
-        q.execute()
-    elif choice == 'quit':
-        pass
+
+def list_entries(entries):
+    count = 0
+    if entries:
+        for entry in entries:
+            count += 1
+            print("[{}] {}, {}".format(count, entry.name, entry.task))
+
+        next_action = input("Select an entry: ")
+        clear()
+        try:
+            int(next_action)
+            index = int(next_action) - 1
+            entry_options(entries, index)
+        except ValueError:
+            if next_action != 'q':
+                print("That is an invalid command.")
+            pass
     else:
-        print("That is not a valid command.")
+        print("No entries were found that match your search criteria.")
 
+
+def validator(var):
+    """Takes input from the user and calls the appropriate function"""
+    hold = 0
+    if var == 'int':
+        while hold == 0:
+            duration = input("Duration (in minutes): ")
+            try:
+                val = int(duration)
+                return duration
+            except ValueError:
+                print("That's not an integer.")
+    elif var == 'date':
+        while hold == 0:
+            date = input("Enter a date (mm/dd/yyyy): ")
+            try:
+                date = datetime.datetime.strptime(date, "%m/%d/%Y").date()
+                return date
+            except ValueError:
+                print("Invalid date.")
+    elif var == 'edit':
+        choice_bank = ['task', 'duration', 'notes', 'date']
+        choice = input("What would you like to edit? ").lower()
+        while choice not in choice_bank:
+            print("That is not a valid option.")
+            choice = input("What would you like to edit? ").lower()
+        return choice
 
 
 main_menu = OrderedDict([
-    ('a', add_entry),
-    ('l', menu_lookup),
+    ('a', "Add an entry."),
+    ('l', "Lookup entries."),
 ])
 
 lookup_menu = OrderedDict([
-    ('e', find_by_employee),
-    ('d', menu_date),
-    ('t', find_by_term),
+    ('e', "Find all entries from an employee."),
+    ('d', "Lookup entries by date."),
+    ('t', "Find all entries pertaining to a term."),
 ])
 
 date_menu = OrderedDict([
-    ('r', find_by_range),
-    ('a', all_entries)
+    ('r', "Find all entries in a range of dates."),
+    ('a', "List all entries by date.")
 ])
 
 if __name__ == '__main__':
