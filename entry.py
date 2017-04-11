@@ -32,172 +32,269 @@ def initialize():
     db.create_tables([Entry], safe=True)
 
 
-def menu_loop():
+def menu_loop(test=False):
     """Show the menu."""
     choice = None
-
     while choice != 'q':
         print("Enter 'q' to quit.")
+        print("[1] Add an entry.")
+        print("[2] Look up entries.")
+        if test == False:
+            choice = inputter('menu', input("> "))
+        else:
+            choice = test
 
-        for key, value in main_menu.items():
-            print('[{}] {}'.format(key, value))
-        choice = input("Action: ").lower().strip()
-        clear()
-
-        if choice == 'a':
-            name = input("Name: ").title()
-            task = input("Task: ")
-            duration = validator('int')
-            notes = input("Notes: ")
+        if choice == '1':
+            name = inputter('name', input("Name: "))
+            task = inputter('task', input("Task: "))
+            duration = inputter('duration', input("Duration (in minutes): "))
+            notes = inputter('notes', input("Notes: "))
             add_entry(name, task, duration, notes)
-        elif choice == 'l':
-            menu_lookup()
+        elif choice == '2':
+            menu_lookup(test=test)
+        else:
+            print("I'm afraid I can't let you do that Dave.")
+        if test != False:
+            choice = 'q'
+    return choice
 
 
-def menu_lookup():
+def menu_lookup(test=False, query=False):
     """Lookup entries."""
     choice = None
 
     while choice != 'q':
         print("Enter 'q' to return to the previous menu.")
-        for key, value in lookup_menu.items():
-            print('[{}] {}'.format(key, value))
-        choice = input('Action: ').lower().strip()
-        clear()
+        print("[1] Find all entries from an employee.")
+        print("[2] Find all entries pertaining to a term.")
+        print("[3] Find all entries based on time spent.")
+        print("[4] Lookup entries by date.")
+        if test == False:
+            choice = inputter('menu', input("> "))
+        else:
+            choice = test
 
-        if choice == 'd':
-            menu_date()
-        elif choice == 'e':
-            query = input("Enter a name: ").capitalize()
-            find_by_employee(query)
-        elif choice == 't':
-            query = input("Enter a term: ")
-            find_by_term(query)
+        if choice == '1':
+            query = inputter('query', input("Enter a name: ")).capitalize()
+            menu_list('employee', query)
+        elif choice == '2':
+            query = inputter('query', input("Enter a term: "))
+            menu_list('term', query)
+        elif choice == '3':
+            query = inputter('duration', input("Enter a number of minutes: "))
+            menu_list('duration', query)
+        elif choice == '4':
+            menu_date(test=test)
+        else:
+            print("I'm afraid I can't let you do that Dave.")
+        if test != False:
+            choice = 'q'
+
+    return choice
 
 
-def menu_date():
+def menu_date(test=False):
     """Lookup entries by date."""
     choice = None
 
     while choice != 'q':
         print("Enter 'q' to return to the previous menu.")
-        for key, value in date_menu.items():
-            print('[{}] {}'.format(key, value))
-        choice = input('Action: ').lower().strip()
+        print("[1] Find all entries in a range of dates.")
+        print("[2] List all entries by date.")
+        if test == False:
+            choice = inputter('menu', input("> "))
+        else:
+            choice = test
+
+        if choice == '1':
+            try:
+                query = [inputter('date', input("Enter the first date: ")),
+                        inputter('date', input("Enter the second date: "))]
+                menu_list('range', query, test=test)
+            except TypeError:
+                pass
+        elif choice == '2':
+            menu_list('all', query=None)
+        else:
+            print("I'm afraid I can't let you do that Dave.")
+        if test != False:
+            choice = 'q'
+    return choice
+
+
+def menu_list(search_by, query, test=False):
+    choice = None
+    while choice != 'q':
+        entries = get_entries(search_by, query)
+        if entries:
+            print("Enter 'q' to return to the previous menu.")
+            count = 0
+            for entry in entries:
+                count += 1
+                print("[{}] {}, {}".format(count, entry.name, entry.task))
+            if test == False:
+                choice = inputter('entry', input("Select an entry: "))
+            else:
+                choice = test
+            if choice == 'q':
+                break
+            elif int(choice) > len(entries) or int(choice) <= 0:
+                print("That is not an option")
+            else:
+                choice = int(choice) - 1
+                menu_entry(entries, choice, test=test)
+        elif search_by == None:
+            pass
+        else:
+            clear()
+            print("No entries were found that match your search criteria.")
+            break
+        if test != False:
+            choice = 'q'
+    return str(choice)
+
+
+def get_entries(search_by, query):
+    if search_by == 'all':
+        return Entry.select()
+    elif search_by == 'employee':
+        return find_by_employee(query)
+    elif search_by == 'term':
+        return find_by_term(query)
+    elif search_by == 'duration':
+        return find_by_duration(query)
+    elif search_by == 'range':
+        return find_by_range(query[0], query[1])
+
+
+def menu_entry(entries, choice, test=False):
+    index = choice
+    choice = None
+    while choice != 'q':
+        print("Enter 'q' to return to the previous menu.")
+        display(entries[index])
+        print("\n")
+        try:
+            entries[index+1]
+            print("[n] next entry")
+        except IndexError:
+            pass
+        try:
+            entries[index-1]
+            print("[p] previous entry")
+        except ValueError:
+            pass
+        print("[e] edit entry")
+        print("[d] delete entry")
+        if test == False:
+            choice = inputter('menu', input("> "))
+        else:
+            choice = test
         clear()
 
-        if choice == 'a':
-            list_entries(Entry.select().order_by(Entry.timestamp.desc()))
-        elif choice == 'r':
-            lower_date = validator('date')
-            higher_date = validator('date')
-            find_by_range(lower_date, higher_date)
+        if choice == 'e':
+            menu_edit(entries[index], test=test)
+        elif choice == 'd':
+            if inputter('delete', input("Are you sure? (yN): ")).lower() == 'y':
+                delete_entry(entries[index])
+            else:
+                pass
+        elif choice == 'p':
+            try:
+                entries[index-1]
+                clear()
+                index -= 1
+                menu_entry(entries, index, test=test)
+            except ValueError:
+                clear()
+                print("This is the first entry.")
+                # menu_entry(entries, index)
+        elif choice == 'n':
+            try:
+                entries[index+1]
+                clear()
+                index += 1
+                menu_entry(entries, index, test=test)
+            except IndexError:
+                clear()
+                print("This is the last entry.")
+                # menu_entry(entries, index)
+        else:
+            print("Not a valid option")
+
+        if test != False:
+            choice = 'q'
+        return choice
 
 
-def menu_edit(choice):
-    if choice == 'task':
-        item = input("Task: ")
-    elif choice == 'duration':
-        item = validator('int')
-    elif choice == 'notes':
-        item = input("Notes: ")
-    elif choice == 'date':
-        item = validator('date')
-    elif choice == 'quit':
-        item = 0
-    return item
+def menu_edit(entry, test=False, test_item=None):
+    choice = None
+    entry_id = entry.id
+    while choice != 'q':
+        print("Enter 'q' to return to the previous menu.")
+        display(Entry.select().where(Entry.id == entry_id)[0])
+        if test == False:
+            choice = input("What would you like to edit? ").lower()
+        else:
+            choice = test
+        clear()
+
+        if choice == 'task':
+            print("Task: {}".format(entry.task))
+            if test_item == None:
+                new_item = inputter('task', input("> "))
+            else:
+                new_item = test_item
+            q = Entry.update(task=new_item).where(Entry.id == entry_id)
+            q.execute()
+        elif choice == 'duration':
+            print("Duration: {}".format(entry.duration))
+            if test_item == None:
+                new_item = inputter('duration', input("(Must be an integer): "))
+            else:
+                new_item = test_item
+            q = Entry.update(duration=new_item).where(Entry.id == entry_id)
+            q.execute()
+        elif choice == 'notes':
+            print("Notes: {}".format(entry.notes))
+            if test_item == None:
+                new_item = inputter('notes', input("> "))
+            else:
+                new_item = test_item
+            q = Entry.update(notes=new_item).where(Entry.id == entry_id)
+            q.execute()
+        elif choice == 'date':
+            print("Date: {}".format(entry.timestamp))
+            if test_item == None:
+                new_item = inputter('date', input("(mm/dd/yyyy): "))
+            else:
+                new_item = test_item
+            q = Entry.update(timestamp=new_item).where(Entry.id == entry_id)
+            q.execute()
+        elif choice == 'q':
+            clear()
+            pass
+        else:
+            print("I'm sorry, I can't let you do that.")
+            print("\n\n")
+
+        if test != False:
+            choice = 'q'
+    return choice
 
 
 def add_entry(name, task, duration, notes):
     """Add an entry."""
 
     Entry.create(name=name, task=task, duration=duration, notes=notes)
-    clear()
+    print("Entry successfully created.")
 
 
 def delete_entry(entry):
     """Delete an entry."""
-    if input("Are you sure? [yN] ").lower() == 'y':
-        entry.delete_instance()
-        print("Entry deleted.")
-
-
-def edit_entry(choice, entry, new_item):
-    """Edit the current entry."""
-    entry_id = entry.id
-
-    if choice == 'task':
-        q = Entry.update(task=new_item).where(Entry.id == entry_id)
-        q.execute()
-    elif choice == 'duration':
-        q = Entry.update(duration=new_item).where(Entry.id == entry_id)
-        q.execute()
-    elif choice == 'notes':
-        q = Entry.update(notes=new_item).where(Entry.id == entry_id)
-        q.execute()
-    elif choice == 'date':
-        q = Entry.update(timestamp=new_item).where(Entry.id == entry_id)
-        q.execute()
-    elif choice == 'quit':
-        pass
-    else:
-        print("That is not a valid command.")
-
-
-def entry_options(entries, index):
-    """Look through a list of entries."""
-    action = None
-    entry = entries[index]
-    display(entry)
-    print("\n\n")
-    print("[e] edit entry")
-    print("[d] delete entry")
-    try:
-        entries[index-1]
-        print("[p] previous entry")
-    except ValueError:
-        pass
-    try:
-        entries[index+1]
-        print("[n] next entry")
-    except IndexError:
-        pass
-    print("[q] return to main menu")
-
-    action = input("Action: ").lower().strip()
-
-    if action == 'e':
-        clear()
-        display(entry)
-        choice = validator('edit')
-        new_item = menu_edit(choice)
-        edit_entry(choice, entry, new_item)
-    elif action == 'd':
-        delete_entry(entries[index])
-        clear()
-    elif action == 'p':
-        try:
-            entries[index-1]
-            index -= 1
-            clear()
-            entry_options(entries, index)
-        except ValueError:
-            clear()
-            print("This is the first entry.")
-            entry_options(entries, index)
-    elif action == 'n':
-        try:
-            entries[index+1]
-            index += 1
-            clear()
-            entry_options(entries, index)
-        except IndexError:
-            clear()
-            print("This is the last entry.")
-            entry_options(entries, index)
-    elif action == 'q':
-        clear()
-        pass
+    entry.delete_instance()
+    print("Entry deleted.")
+    return True
 
 
 def display(entry):
@@ -211,90 +308,82 @@ def display(entry):
 
 def find_by_employee(query):
     """Find all entries from an employee."""
-    entries = Entry.select().where(Entry.name.contains(query)).order_by(Entry.timestamp.desc())
-    list_entries(entries)
+    return Entry.select().where(Entry.name.contains(query)).order_by(Entry.timestamp.desc())
+
+
+def find_by_duration(query):
+    """Find all entries with a specific duration."""
+    return Entry.select().where(Entry.duration == query).order_by(Entry.timestamp.desc())
 
 
 def find_by_term(query):
     """Find all entries pertaining to a term."""
-    entries = Entry.select().where(
+    return Entry.select().where(
         Entry.task.contains(query) |
         Entry.notes.contains(query)).order_by(Entry.timestamp.desc())
-    list_entries(entries)
 
 
 def find_by_range(lower_date, higher_date):
     """Find all entries in a range of dates."""
-    entries = Entry.select().where((Entry.timestamp >= lower_date) &
+    return Entry.select().where((Entry.timestamp >= lower_date) &
                                    (Entry.timestamp <= higher_date)).order_by(
                                    Entry.timestamp.desc())
-    list_entries(entries)
 
 
-def list_entries(entries):
-    count = 0
-    if entries:
-        for entry in entries:
-            count += 1
-            print("[{}] {}, {}".format(count, entry.name, entry.task))
-
-        next_action = input("Select an entry: ")
-        clear()
-        try:
-            int(next_action)
-            index = int(next_action) - 1
-            entry_options(entries, index)
-        except ValueError:
-            if next_action != 'q':
-                print("That is an invalid command.")
-            pass
-    else:
-        print("No entries were found that match your search criteria.")
+def validate_date(string):
+    try:
+        var = datetime.datetime.strptime(string, "%m/%d/%Y").date()
+        return True, var
+    except ValueError:
+        print("Invalid date.")
+        return False
 
 
-def validator(var):
-    """Takes input from the user and calls the appropriate function"""
-    hold = 0
-    if var == 'int':
-        while hold == 0:
-            duration = input("Duration (in minutes): ")
-            try:
-                val = int(duration)
-                return duration
-            except ValueError:
-                print("That's not an integer.")
-    elif var == 'date':
-        while hold == 0:
-            date = input("Enter a date (mm/dd/yyyy): ")
-            try:
-                date = datetime.datetime.strptime(date, "%m/%d/%Y").date()
-                return date
-            except ValueError:
-                print("Invalid date.")
-    elif var == 'edit':
-        choice_bank = ['task', 'duration', 'notes', 'date']
-        choice = input("What would you like to edit? ").lower()
-        while choice not in choice_bank:
-            print("That is not a valid option.")
-            choice = input("What would you like to edit? ").lower()
-        return choice
+def validate_duration(string):
+    try:
+        var = int(string)
+        return True
+    except ValueError:
+        print("That's not an integer.")
+        return False
 
 
-main_menu = OrderedDict([
-    ('a', "Add an entry."),
-    ('l', "Lookup entries."),
-])
+def inputter(select, choice):
+    hold = False
+    if select == 'menu':
+        choice = choice.lower().strip()
+    elif select == 'name':
+        choice = choice.title()
+    elif select == 'task':
+        choice = choice
+    elif select == 'duration':
+        while hold == False:
+            hold = validate_duration(choice)
+            if hold == False:
+                choice = input("Please enter an integer: ")
+    elif select == 'notes':
+        choice = choice
+    elif select == 'date':
+        while hold == False:
+            hold, choice = validate_date(choice)
+            if hold == False:
+                choice = input("Please use the correct format (mm/dd/yyyy): ")
+    elif select == 'query':
+        choice = choice
+    elif select == 'delete':
+        choice = choice.lower()
+    elif select == 'entry':
+        while hold == False:
+            choice = choice
+            if choice == 'q':
+                hold = True
+            else:
+                hold = validate_duration(choice)
+            if hold == False:
+                choice = input("Please choose an entry (number): ")
+    clear()
+    return choice
 
-lookup_menu = OrderedDict([
-    ('e', "Find all entries from an employee."),
-    ('d', "Lookup entries by date."),
-    ('t', "Find all entries pertaining to a term."),
-])
-
-date_menu = OrderedDict([
-    ('r', "Find all entries in a range of dates."),
-    ('a', "List all entries by date.")
-])
 
 if __name__ == '__main__':
     initialize()
